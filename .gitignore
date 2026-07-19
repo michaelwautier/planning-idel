@@ -1,0 +1,4 @@
+planning_config.json
+venv/
+__pycache__/
+*.csv
