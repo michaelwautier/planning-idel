@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from calendrier import jours_feries
+from ui.reinitialisation import bouton_effacer_indispos
 
 COLONNES = ["Infirmier·e", "Du", "Au", "Type"]
 TYPES = ["Indisponible", "Souhait de repos"]
@@ -53,6 +54,7 @@ def section_indisponibilites(params):
     # Le tableau de travail reflète les éditions (et suppressions natives) en
     # cours ; on le mémorise pour ne pas les perdre au prochain rerun.
     st.session_state.tableau_indispos = tableau.reset_index(drop=True)
+    bouton_effacer_indispos()
     return tableau
 
 
