@@ -10,31 +10,49 @@ Lancement   : streamlit run app_planning.py
 import io
 import json
 from datetime import date, timedelta
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 from ortools.sat.python import cp_model
+from streamlit_js_eval import streamlit_js_eval
 
 JOURS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
-# Fichier de configuration persistant, à côté du script
-CONFIG_PATH = Path(__file__).with_name("planning_config.json")
+# Configuration persistée dans le localStorage du navigateur (une config par
+# utilisateur). Contrairement à un fichier sur disque, cela survit aux
+# redéploiements de Streamlit Community Cloud et n'est pas partagé entre les
+# visiteurs qui utilisent la même instance.
+STORAGE_KEY = "planning_config"
 
 
-def charger_config():
-    try:
-        if CONFIG_PATH.exists():
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return {}
+def config_navigateur():
+    """Lit la configuration dans le localStorage du navigateur via un eval JS.
+
+    Renvoie :
+      - None  : le navigateur n'a pas encore répondu (1er rendu) ;
+      - ""    : le navigateur a répondu mais aucune config n'est enregistrée ;
+      - str   : la chaîne JSON enregistrée.
+
+    L'appel est non bloquant : streamlit_js_eval renvoie None immédiatement puis
+    déclenche un re-run quand le navigateur a évalué le JS.
+    """
+    return streamlit_js_eval(
+        js_expressions=f"localStorage.getItem('{STORAGE_KEY}') || ''",
+        key="charger_config",
+    )
 
 
 def sauver_config(cfg):
     try:
-        CONFIG_PATH.write_text(
-            json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+        payload = json.dumps(cfg, ensure_ascii=False)
+        # json.dumps(payload) produit un littéral JS correctement échappé
+        # (guillemets, apostrophes, retours ligne), donc sûr même pour un nom
+        # contenant une apostrophe.
+        streamlit_js_eval(
+            js_expressions=(
+                f"localStorage.setItem('{STORAGE_KEY}', {json.dumps(payload)})"
+            ),
+            key="sauver_config",
         )
         return True
     except Exception:
@@ -418,10 +436,22 @@ def generer_planning(
 st.set_page_config(page_title="Planning cabinet IDEL", page_icon="🗓️", layout="wide")
 st.title("🗓️ Planning cabinet infirmier")
 
-# Chargement de la configuration persistée (une seule fois par session)
+# Chargement de la configuration persistée (une seule fois par session).
+# Le localStorage n'est lisible qu'au 2e rendu (le navigateur évalue le JS
+# après le montage du composant). Tant qu'il n'a pas répondu (None), on attend
+# le prochain rendu ; l'appel étant non bloquant, il déclenche ce re-run tout
+# seul. On n'initialise les widgets qu'une fois la config réellement chargée,
+# sinon ils seraient figés sur les valeurs par défaut.
 if "config_initialisee" not in st.session_state:
+    _brut = config_navigateur()
+    if _brut is None:
+        st.caption("Chargement de la configuration…")
+        st.stop()
     st.session_state.config_initialisee = True
-    _cfg = charger_config()
+    try:
+        _cfg = json.loads(_brut) if _brut else {}
+    except Exception:
+        _cfg = {}
     st.session_state.setdefault(
         "k_noms", _cfg.get("noms", "Alice\nBruno\nChloé\nDavid\nEmma")
     )
@@ -455,7 +485,7 @@ if "config_initialisee" not in st.session_state:
 
 with st.sidebar:
     st.header("Paramètres")
-    st.caption("💾 Configuration sauvegardée automatiquement (planning_config.json)")
+    st.caption("💾 Configuration sauvegardée automatiquement dans ce navigateur")
 
     noms_texte = st.text_area(
         "Infirmier·e·s (un nom par ligne)", height=120, key="k_noms"
@@ -761,8 +791,9 @@ if st.session_state.get("cfg_sauvee") != cfg_actuelle:
         st.session_state.cfg_sauvee = cfg_actuelle
     else:
         st.warning(
-            f"Impossible d'écrire {CONFIG_PATH.name} — la configuration ne "
-            "sera pas conservée entre les sessions (dossier en lecture seule ?)."
+            "Impossible d'enregistrer la configuration dans le navigateur — "
+            "elle ne sera pas conservée entre les sessions (localStorage "
+            "bloqué ou navigation privée ?)."
         )
 
 # Export du tableau courant (avec les modifications en cours)
