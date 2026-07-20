@@ -13,7 +13,7 @@ Shift scheduler for a real French home-care nursing practice (_cabinet infirmier
 - **`Parametres`** (in `ui/parametres.py`) — the dataclass every section receives; add a sidebar widget by adding a field there.
 - **`solveur.py`** — `generer_planning`, the OR-Tools CP-SAT model. No Streamlit import, so it can be imported and run headless.
 - **`calendrier.py`** — `JOURS_FR`, Easter computation and `jours_feries`.
-- **`affichage.py`** — `afficher_tables_planning` (color-coded weekly tables) and `stats_depuis_resultat` (summary recomputed from a result dict, used by the CSV viewer).
+- **`affichage.py`** — `afficher_planning` (color-coded planning, with an "Un jour par ligne" toggle: off = one table per week with nurses as rows, on = a single table with one day per row and one column per nurse) and `stats_depuis_resultat` (summary recomputed from a result dict, used by the CSV viewer). Both the generated planning and the CSV viewer call it, passing a distinct `cle` because two widgets cannot share a key on one page; the choice itself is shared between them via `k_vue_planning` (a bool, persisted as `vue_jours_en_lignes`) and the widget key is re-set from it on every run. The toggle uses an `on_change` callback, not a post-render assignment: `sauvegarde` runs earlier in the script, so without it the preference would be persisted one interaction late.
 - **`persistance.py`** — `config_navigateur` / `sauver_config`, the localStorage round-trip.
 - **`planning_idel.py`** — earlier CLI-only version, superseded by the app; kept for reference, not maintained. May lack newer rules.
 - **Config persistence** — names, all sidebar parameters, and the unavailability table are stored in the browser's `localStorage` (via `streamlit-js-eval`), one config per browser/user, under the key `planning_config`. `config_navigateur` reads it, `sauver_config` writes it. A legacy `planning_config.json` may still exist locally from the old file-based approach; it's gitignored and no longer read/written.
@@ -55,7 +55,7 @@ Each block below maps to one module in `ui/` — see the file list above.
 
 Sidebar: nurse names (textarea, one per line), rounds count (1–4), start/end dates, min–max consecutive slider, min rest slider, truncated-blocks checkbox, owners multiselect, synchronized-pair multiselect + weight slider, solver time budget. All widgets are keyed (`k_*`) and auto-persisted.
 
-Main page: previous-period state table → unavailability/wishes table (with CSV import, delete-checked-rows button, CSV export) → Generate button (with auto-retry ladder) → color-coded weekly tables → per-nurse summary (total, Sundays/holidays, per-round counts) → planning CSV download → collapsible viewer that re-renders any previously exported planning CSV (rebuilds nurses and stats from file content).
+Main page: previous-period state table → unavailability/wishes table (with CSV import, delete-checked-rows button, CSV export) → Generate button (with auto-retry ladder) → view toggle + color-coded planning tables → per-nurse summary (total, Sundays/holidays, per-round counts) → planning CSV download → collapsible viewer that re-renders any previously exported planning CSV (rebuilds nurses and stats from file content).
 
 ## Hard-won implementation details (don't regress these)
 

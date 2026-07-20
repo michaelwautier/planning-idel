@@ -75,6 +75,9 @@ def _appliquer_config(cfg):
     st.session_state.setdefault("k_binome", list(cfg.get("binome", [])))
     st.session_state.setdefault("k_poids_binome", int(cfg.get("poids_binome", 6)))
     st.session_state.setdefault("k_temps", int(cfg.get("temps_max", 20)))
+    st.session_state.setdefault(
+        "k_vue_planning", bool(cfg.get("vue_jours_en_lignes", False))
+    )
 
     lignes = cfg.get("indispos", [])
     if lignes and "tableau_indispos" not in st.session_state:

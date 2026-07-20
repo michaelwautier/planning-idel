@@ -5,7 +5,7 @@ import io
 import pandas as pd
 import streamlit as st
 
-from affichage import afficher_tables_planning
+from affichage import afficher_planning
 from calendrier import JOURS_FR
 from solveur import generer_planning
 
@@ -79,8 +79,9 @@ def _afficher_sortie(params, sortie):
     st.success(f"Planning {qualite}, calculé en {sortie['duree']:.1f} s")
     _avertir_relax(params, sortie)
 
-    jours = sortie["jours"]
-    afficher_tables_planning(jours, params.infirmiers, sortie["resultat"])
+    afficher_planning(
+        sortie["jours"], params.infirmiers, sortie["resultat"], cle="genere"
+    )
 
     st.subheader("Récapitulatif")
     st.dataframe(pd.DataFrame(sortie["stats"]), width="stretch", hide_index=True)

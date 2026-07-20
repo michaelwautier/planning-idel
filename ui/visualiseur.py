@@ -3,7 +3,7 @@
 import pandas as pd
 import streamlit as st
 
-from affichage import afficher_tables_planning, stats_depuis_resultat
+from affichage import afficher_planning, stats_depuis_resultat
 
 
 def section_visualiseur():
@@ -53,7 +53,7 @@ def _afficher_csv(fichier_plan):
         f"{jours_imp[-1].strftime('%d/%m/%Y')} · "
         f"{len(cols_tournees)} tournées · " + ", ".join(sorted(noms_imp))
     )
-    afficher_tables_planning(jours_imp, sorted(noms_imp), resultat_imp)
+    afficher_planning(jours_imp, sorted(noms_imp), resultat_imp, cle="importe")
     st.dataframe(
         pd.DataFrame(
             stats_depuis_resultat(
