@@ -2,6 +2,8 @@
 
 Constraint-based shift scheduler for a small home-care nursing practice (French _cabinet infirmier libéral_). Give it each nurse's unavailability and the practice's working rules, and it generates a fair schedule that assigns one nurse to each care round (_tournée_) every day — powered by [Google OR-Tools](https://developers.google.com/optimization) CP-SAT, with a [Streamlit](https://streamlit.io) web UI.
 
+**🚀 Live app: [planning-idel.streamlit.app](https://planning-idel.streamlit.app/)**
+
 ## Features
 
 - **Automatic schedule generation** for N nurses across 1–4 daily rounds over any date range
