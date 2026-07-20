@@ -47,6 +47,21 @@ The app opens at `http://localhost:8501`. Typical workflow:
 
 If no schedule satisfies every rule, the app explains why and, when owners are designated, automatically retries with relaxed rules for them only.
 
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+pytest        # test suite
+ruff check .  # lint
+```
+
+The tests cover the Streamlit-free logic: the public-holiday calendar, the CP-SAT
+solver (every business rule is asserted as an invariant on a generated schedule),
+the unavailability parsing/expansion, and the summary/color helpers. The same two
+commands run on every push and pull request via GitHub Actions
+(`.github/workflows/ci.yml`), on Python 3.14 (the version Streamlit Community
+Cloud runs).
+
 ## How it works
 
 The problem is modeled as a constraint satisfaction/optimization problem solved with CP-SAT:
