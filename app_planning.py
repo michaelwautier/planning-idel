@@ -433,7 +433,14 @@ def generer_planning(
 # Interface
 # ============================================================
 
-st.set_page_config(page_title="Planning cabinet IDEL", page_icon="🗓️", layout="wide")
+# Le mode large (pleine largeur) est réglable depuis l'interface : Streamlit
+# masque ce réglage dans son menu natif sur les apps déployées. On lit la
+# préférence dans session_state (persistée via la config navigateur) avant tout
+# autre appel Streamlit, car set_page_config doit rester la première commande.
+_layout = "wide" if st.session_state.get("k_wide", True) else "centered"
+st.set_page_config(
+    page_title="Planning cabinet IDEL", page_icon="🗓️", layout=_layout
+)
 st.title("🗓️ Planning cabinet infirmier")
 
 # Chargement de la configuration persistée (une seule fois par session).
@@ -456,6 +463,7 @@ if "config_initialisee" not in st.session_state:
         "k_noms", _cfg.get("noms", "Alice\nBruno\nChloé\nDavid\nEmma")
     )
     st.session_state.setdefault("k_nb_tournees", int(_cfg.get("nb_tournees", 2)))
+    st.session_state.setdefault("k_wide", bool(_cfg.get("wide", True)))
     try:
         _debut = date.fromisoformat(_cfg["date_debut"])
         _fin = date.fromisoformat(_cfg["date_fin"])
@@ -482,10 +490,22 @@ if "config_initialisee" not in st.session_state:
             st.session_state.tableau_indispos = _df[
                 ["Infirmier·e", "Du", "Au", "Type"]
             ].reset_index(drop=True)
+    # La préférence de mise en page vient d'être chargée : si elle diffère de
+    # celle qu'a utilisée set_page_config ce rendu-ci, on relance pour
+    # l'appliquer tout de suite (sinon l'écran resterait en mode par défaut).
+    if ("wide" if st.session_state.k_wide else "centered") != _layout:
+        st.rerun()
 
 with st.sidebar:
     st.header("Paramètres")
     st.caption("💾 Configuration sauvegardée automatiquement dans ce navigateur")
+
+    st.toggle(
+        "Mode large (pleine largeur)",
+        key="k_wide",
+        help="Élargit le contenu sur toute la largeur de l'écran. Décoche pour "
+        "un affichage centré, plus étroit sur les grands écrans.",
+    )
 
     noms_texte = st.text_area(
         "Infirmier·e·s (un nom par ligne)", height=120, key="k_noms"
@@ -811,6 +831,7 @@ for _, _l in tableau.iterrows():
 cfg_actuelle = {
     "noms": noms_texte,
     "nb_tournees": int(nb_tournees),
+    "wide": bool(st.session_state.get("k_wide", True)),
     "date_debut": date_debut.isoformat(),
     "date_fin": date_fin.isoformat(),
     "min_max": [int(min_consec), int(max_consec)],
