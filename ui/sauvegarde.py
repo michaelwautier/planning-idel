@@ -3,6 +3,7 @@
 import pandas as pd
 import streamlit as st
 
+from affichage import COULEURS_DEFAUT
 from persistance import sauver_config
 
 
@@ -24,6 +25,10 @@ def sauvegarder(params, tableau, tableau_etat):
         # Choisie près du planning, pas dans la sidebar : lue directement en
         # session comme `wide`, sans passer par Parametres.
         "vue_jours_en_lignes": bool(st.session_state.get("k_vue_planning", False)),
+        "couleurs": {
+            code: str(st.session_state.get(f"k_couleur_{code}", defaut))
+            for code, defaut in COULEURS_DEFAUT.items()
+        },
         "indispos": _serialiser_indispos(tableau),
         "etat": _serialiser_etat(tableau_etat),
     }
