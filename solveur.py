@@ -4,11 +4,31 @@ Module volontairement sans dépendance à Streamlit, pour rester exécutable et
 testable headless (voir AGENTS.md).
 """
 
+import os
 from datetime import timedelta
 
 from ortools.sat.python import cp_model
 
 from calendrier import jours_feries
+
+# 8 en temps normal : la recherche parallèle améliore nettement la qualité des
+# solutions dans le budget de temps imparti — ne pas baisser cette valeur par
+# défaut, la prod (Linux) n'est pas concernée par ce qui suit.
+#
+# Surchargeable parce que CP-SAT se bloque en multi-workers sur les builds
+# Homebrew de Python en macOS arm64 (constaté le 2026-07-20 avec ortools
+# 9.15.6755, sur 3.12.13 ET 3.14.4 ; le Python 3.9 d'Apple, lui, fonctionne).
+# Symptôme : le solve ne rend jamais la main, à 0 % CPU, garé sur une condvar
+# dans `operations_research::sat::NonDeterministicLoop` — et `temps_max` ne
+# sauve pas, le budget étant appliqué PAR les workers, qui ne démarrent jamais.
+# `PLANNING_NB_WORKERS=1` permet de travailler en local, au prix du parallélisme.
+#
+# À ne pas confondre avec le coût de premier chargement macOS (validation des
+# signatures des binaires fraîchement installés) : lui aussi fige le process à
+# 0 % CPU pendant des minutes, mais se termine tout seul et ne se produit qu'une
+# fois. `sample <pid>` les distingue en 2 s : pile dans `dyld4::…CodeSignature`
+# = démarrage à froid ; pile dans `operations_research::sat::…` = blocage.
+NB_WORKERS = int(os.environ.get("PLANNING_NB_WORKERS", "8"))
 
 
 def generer_planning(
@@ -264,7 +284,7 @@ def generer_planning(
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(temps_max)
-    solver.parameters.num_workers = 8
+    solver.parameters.num_workers = NB_WORKERS
     status = solver.solve(model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
