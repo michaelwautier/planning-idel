@@ -21,6 +21,9 @@ def sauvegarder(params, tableau, tableau_etat):
         "binome": list(params.choix_binome),
         "poids_binome": int(params.poids_binome),
         "temps_max": int(params.temps_max),
+        # Choisie près du planning, pas dans la sidebar : lue directement en
+        # session comme `wide`, sans passer par Parametres.
+        "vue_jours_en_lignes": bool(st.session_state.get("k_vue_planning", False)),
         "indispos": _serialiser_indispos(tableau),
         "etat": _serialiser_etat(tableau_etat),
     }
