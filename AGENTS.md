@@ -18,7 +18,11 @@ Shift scheduler for a real French home-care nursing practice (_cabinet infirmier
 - **`persistance.py`** — `config_navigateur` / `sauver_config`, the localStorage round-trip.
 - **`planning_idel.py`** — earlier CLI-only version, superseded by the app; kept for reference, not maintained. May lack newer rules.
 - **Config persistence** — names, all sidebar parameters, and the unavailability table are stored in the browser's `localStorage` (via `streamlit-js-eval`), one config per browser/user, under the key `planning_config`. `config_navigateur` reads it, `sauver_config` writes it. A legacy `planning_config.json` may still exist locally from the old file-based approach; it's gitignored and no longer read/written.
-- **`requirements.txt`** — ortools, streamlit, pandas, streamlit-js-eval. Python 3.10+. Dev machine: MacBook (Apple Silicon), venv-based workflow, Zed editor.
+- **`requirements.txt`** — ortools, streamlit, pandas, streamlit-js-eval. Python 3.10+. Dev machine: MacBook (Apple Silicon), venv-based workflow, Zed editor. `requirements-dev.txt` adds pytest and ruff.
+- **`tests/`** — pytest suite (`pytest`, config in `pyproject.toml`), run in CI by `.github/workflows/ci.yml` on Python 3.10 and 3.12 alongside `ruff check .` and an `import app_planning` smoke test. Only Streamlit-free logic is tested; UI functions that call `st.*` are covered indirectly at most. Two things to know before writing solver tests:
+  - The solver is heuristic and multi-objective — assert **invariants** (coverage, block lengths, rest, round stability), never an expected schedule.
+  - Because of the extended time axis, a work block touching day 0 or the last day may be the tail/head of a block that lives outside the window; its visible length proves nothing. `blocs_entiers` in `tests/test_solveur.py` filters those out.
+- **Lint** — `ruff check .` must pass; `ruff format` is *not* enforced (some existing files predate it). `E741` is ignored on purpose (`l` in Butcher's algorithm and as "ligne" in `sauvegarde.py`).
 
 ## Solver model (CP-SAT)
 
