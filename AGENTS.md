@@ -8,7 +8,13 @@ Shift scheduler for a real French home-care nursing practice (_cabinet infirmier
 
 ## Stack & files
 
-- **`app_planning.py`** — the whole application: Streamlit UI + OR-Tools CP-SAT solver in one file. This is the maintained entry point (`streamlit run app_planning.py`).
+- **`app_planning.py`** — entry point (`streamlit run app_planning.py`), ~30 lines: it only calls the `ui/` sections in order. **The call order IS the page layout** — Streamlit re-runs the script top to bottom on every interaction, so reordering these calls moves the sections on screen. Note `sauvegarde.sauvegarder` sits between the unavailability editor and its export button; that position matters only because its failure warning renders there.
+- **`ui/`** — one module per page section, in display order: `demarrage` (set_page_config + localStorage bootstrap; may `st.stop`/`st.rerun`), `parametres` (sidebar → `Parametres` dataclass, plus `valider` which can `st.stop`), `etat_precedent` (previous-period table → `etat_initial` for the solver), `indisponibilites` (holidays reminder, CSV import, add form, editor, export, and `extraire` → `indispos`/`preferences` date sets), `sauvegarde` (serialize everything → `sauver_config`), `generation` (Generate button, relax ladder, result tables, planning CSV), `visualiseur` (re-render an exported planning CSV).
+- **`Parametres`** (in `ui/parametres.py`) — the dataclass every section receives; add a sidebar widget by adding a field there.
+- **`solveur.py`** — `generer_planning`, the OR-Tools CP-SAT model. No Streamlit import, so it can be imported and run headless.
+- **`calendrier.py`** — `JOURS_FR`, Easter computation and `jours_feries`.
+- **`affichage.py`** — `afficher_tables_planning` (color-coded weekly tables) and `stats_depuis_resultat` (summary recomputed from a result dict, used by the CSV viewer).
+- **`persistance.py`** — `config_navigateur` / `sauver_config`, the localStorage round-trip.
 - **`planning_idel.py`** — earlier CLI-only version, superseded by the app; kept for reference, not maintained. May lack newer rules.
 - **Config persistence** — names, all sidebar parameters, and the unavailability table are stored in the browser's `localStorage` (via `streamlit-js-eval`), one config per browser/user, under the key `planning_config`. `config_navigateur` reads it, `sauver_config` writes it. A legacy `planning_config.json` may still exist locally from the old file-based approach; it's gitignored and no longer read/written.
 - **`requirements.txt`** — ortools, streamlit, pandas, streamlit-js-eval. Python 3.10+. Dev machine: MacBook (Apple Silicon), venv-based workflow, Zed editor.
@@ -45,6 +51,8 @@ Up to two owners can be designated. If the solve is infeasible under normal rule
 
 ## UI structure (top to bottom)
 
+Each block below maps to one module in `ui/` — see the file list above.
+
 Sidebar: nurse names (textarea, one per line), rounds count (1–4), start/end dates, min–max consecutive slider, min rest slider, truncated-blocks checkbox, owners multiselect, synchronized-pair multiselect + weight slider, solver time budget. All widgets are keyed (`k_*`) and auto-persisted.
 
 Main page: previous-period state table → unavailability/wishes table (with CSV import, delete-checked-rows button, CSV export) → Generate button (with auto-retry ladder) → color-coded weekly tables → per-nurse summary (total, Sundays/holidays, per-round counts) → planning CSV download → collapsible viewer that re-renders any previously exported planning CSV (rebuilds nurses and stats from file content).
@@ -60,7 +68,7 @@ Main page: previous-period state table → unavailability/wishes table (with CSV
 
 ## Testing approach
 
-No test framework; features were validated by executing the solver section headlessly (`exec` of the file up to the UI marker) with assertion scripts: block lengths within bounds, rest durations (incl. 3-after-4), round stability, unavailability respected, boundary-state scenarios (4-day carryover → forced rest; 1-day unfinished block → forced continuation on same round), fairness spreads, pair-sync day counts, CSV round-trips. Reuse this pattern when changing constraints.
+No test framework; features were validated by running the solver headlessly (`from solveur import generer_planning` — no Streamlit needed) with assertion scripts: block lengths within bounds, rest durations (incl. 3-after-4), round stability, unavailability respected, boundary-state scenarios (4-day carryover → forced rest; 1-day unfinished block → forced continuation on same round), fairness spreads, pair-sync day counts, CSV round-trips. Reuse this pattern when changing constraints.
 
 ## Known limitations & accepted trade-offs
 
