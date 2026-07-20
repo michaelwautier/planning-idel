@@ -10,22 +10,28 @@ Lancement   : streamlit run app_planning.py
 import io
 import json
 from datetime import date, timedelta
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 from ortools.sat.python import cp_model
+from streamlit_local_storage import LocalStorage
 
 JOURS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
-# Fichier de configuration persistant, à côté du script
-CONFIG_PATH = Path(__file__).with_name("planning_config.json")
+# Configuration persistée dans le localStorage du navigateur (une config par
+# utilisateur). Contrairement à un fichier sur disque, cela survit aux
+# redéploiements de Streamlit Community Cloud et n'est pas partagé entre les
+# visiteurs qui utilisent la même instance.
+STORAGE_KEY = "planning_config"
 
 
 def charger_config():
     try:
-        if CONFIG_PATH.exists():
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        # L'init de LocalStorage lit tout le localStorage du navigateur de
+        # façon bloquante, donc la valeur est disponible dès ce run.
+        brut = LocalStorage().getItem(STORAGE_KEY)
+        if brut:
+            return json.loads(brut)
     except Exception:
         pass
     return {}
@@ -33,8 +39,10 @@ def charger_config():
 
 def sauver_config(cfg):
     try:
-        CONFIG_PATH.write_text(
-            json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+        LocalStorage().setItem(
+            STORAGE_KEY,
+            json.dumps(cfg, ensure_ascii=False),
+            key="planning_config_set",
         )
         return True
     except Exception:
@@ -418,6 +426,17 @@ def generer_planning(
 st.set_page_config(page_title="Planning cabinet IDEL", page_icon="🗓️", layout="wide")
 st.title("🗓️ Planning cabinet infirmier")
 
+# Le composant localStorage ne renvoie la donnée du navigateur qu'au 2e rendu
+# (il lit le navigateur après son montage). On bloque donc le tout premier
+# rendu, le temps que le composant se monte et déclenche un re-run, sinon on
+# initialiserait les widgets avec les valeurs par défaut avant même d'avoir lu
+# la configuration sauvegardée.
+if "storage_hydrate" not in st.session_state:
+    LocalStorage()  # monte le composant ; sa réponse déclenchera le 2e rendu
+    st.session_state.storage_hydrate = True
+    st.caption("Chargement de la configuration…")
+    st.stop()
+
 # Chargement de la configuration persistée (une seule fois par session)
 if "config_initialisee" not in st.session_state:
     st.session_state.config_initialisee = True
@@ -455,7 +474,7 @@ if "config_initialisee" not in st.session_state:
 
 with st.sidebar:
     st.header("Paramètres")
-    st.caption("💾 Configuration sauvegardée automatiquement (planning_config.json)")
+    st.caption("💾 Configuration sauvegardée automatiquement dans ce navigateur")
 
     noms_texte = st.text_area(
         "Infirmier·e·s (un nom par ligne)", height=120, key="k_noms"
@@ -761,8 +780,9 @@ if st.session_state.get("cfg_sauvee") != cfg_actuelle:
         st.session_state.cfg_sauvee = cfg_actuelle
     else:
         st.warning(
-            f"Impossible d'écrire {CONFIG_PATH.name} — la configuration ne "
-            "sera pas conservée entre les sessions (dossier en lecture seule ?)."
+            "Impossible d'enregistrer la configuration dans le navigateur — "
+            "elle ne sera pas conservée entre les sessions (localStorage "
+            "bloqué ou navigation privée ?)."
         )
 
 # Export du tableau courant (avec les modifications en cours)

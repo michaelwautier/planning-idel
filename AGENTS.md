@@ -10,8 +10,8 @@ Shift scheduler for a real French home-care nursing practice (_cabinet infirmier
 
 - **`app_planning.py`** — the whole application: Streamlit UI + OR-Tools CP-SAT solver in one file. This is the maintained entry point (`streamlit run app_planning.py`).
 - **`planning_idel.py`** — earlier CLI-only version, superseded by the app; kept for reference, not maintained. May lack newer rules.
-- **`planning_config.json`** — auto-created at runtime next to the script; persists names, all sidebar parameters, and the unavailability table between sessions. Contains real personal data → gitignored, never commit.
-- **`requirements.txt`** — ortools, streamlit, pandas. Python 3.10+. Dev machine: MacBook (Apple Silicon), venv-based workflow, Zed editor.
+- **Config persistence** — names, all sidebar parameters, and the unavailability table are stored in the browser's `localStorage` (via `streamlit-local-storage`), one config per browser/user, under the key `planning_config`. `charger_config`/`sauver_config` wrap it. A legacy `planning_config.json` may still exist locally from the old file-based approach; it's gitignored and no longer read/written.
+- **`requirements.txt`** — ortools, streamlit, pandas, streamlit-local-storage. Python 3.10+. Dev machine: MacBook (Apple Silicon), venv-based workflow, Zed editor.
 
 ## Solver model (CP-SAT)
 
@@ -67,7 +67,8 @@ No test framework; features were validated by executing the solver section headl
 - Fairness counters are **per-generated-period only**: the solver knows the previous period's _sequence state_ but not its workload counters, so someone overworked last month isn't compensated this month. Acceptable for now; "rolling fairness" would be a separate feature.
 - The previous-period table is deliberately **not persisted** (changes every month; restoring a stale state would be a trap).
 - The exported-planning viewer re-displays and re-computes stats but does **not** re-validate constraints on hand-edited CSVs (a conformity checker was suggested, not built).
-- Single-user assumption: `planning_config.json` is shared by all sessions; deployment beyond localhost needs auth + real storage (Docker volume / SQLite / Supabase discussed; NAS + VPN recommended). GDPR applies: nurse absences are personal data.
+- Config lives in per-browser `localStorage` (not shared across users/devices, cleared if browser data is wiped). Deployed on Streamlit Community Cloud: add auth if it shouldn't be public; a real backend (SQLite / Supabase) is still needed for shared or cross-device storage. GDPR applies: nurse absences are personal data.
+- localStorage quirk: the component only returns browser data on the **2nd** render (`streamlit-local-storage` reads after mount). The app handles this with a one-time hydration gate (`storage_hydrate` flag + `st.stop()`) placed before config init, so widgets aren't seeded with defaults before the saved config loads. Don't move config reads ahead of that gate.
 
 ## Possible next steps (discussed, not built)
 

@@ -11,7 +11,7 @@ Constraint-based shift scheduler for a small home-care nursing practice (French 
 - **Previous-period handoff**: declare each nurse's state at the end of the last schedule (working for N days on round X, or resting for N days) so all sequence rules carry over across the month boundary
 - **Synchronized pair**: designate two nurses who work and rest together as much as possible, each covering one round, with an adjustable priority weight
 - **Practice owners (titulaires) fallback**: if the schedule is infeasible, rules are progressively relaxed for up to two designated owners only — first +1 consecutive day, then no consecutive-day limit — with an explicit warning describing what was relaxed
-- **Persistence**: names, parameters, and the unavailability table are auto-saved to `planning_config.json` and restored on the next launch
+- **Persistence**: names, parameters, and the unavailability table are auto-saved to the browser's `localStorage` (one config per browser/user) and restored on the next launch — this survives Streamlit Community Cloud redeploys and isn't shared between visitors
 - **Outputs**: color-coded weekly tables, a per-nurse summary (total days, Sundays/holidays, per-round split), CSV export, and a viewer to re-display any previously exported schedule
 
 ## Requirements
@@ -55,4 +55,4 @@ The problem is modeled as a constraint satisfaction/optimization problem solved 
 
 ## Data & privacy
 
-All data stays on the machine running the app. `planning_config.json` contains real names and absences — it is intentionally listed in `.gitignore` and must not be committed. If you deploy the app beyond localhost, add authentication and persistent storage (e.g. a Docker volume, or SQLite/Postgres for multi-user setups), and mind GDPR: staff absences are personal data.
+The saved configuration (real names and absences) lives in each user's browser `localStorage`, not on the server — it is per-browser and never leaves the visitor's machine except while a schedule is being computed. Mind GDPR: staff absences are personal data. When deploying beyond localhost (e.g. Streamlit Community Cloud), add authentication if the app should not be public; note that `localStorage` config is per-browser only (not shared across devices, cleared if the user wipes browser data), so use a real backend (SQLite/Postgres/Supabase) if you need shared or durable multi-user storage.
