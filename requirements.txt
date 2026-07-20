@@ -1,4 +1,4 @@
 ortools>=9.10
 streamlit>=1.35
 pandas>=2.0
-streamlit-local-storage>=0.0.25
+streamlit-js-eval>=1.0.0
