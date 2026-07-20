@@ -12,6 +12,18 @@ from ui.reinitialisation import bouton_effacer_indispos
 COLONNES = ["Infirmier·e", "Du", "Au", "Type"]
 TYPES = ["Indisponible", "Souhait de repos"]
 
+# Marge autour de la période du planning : la saisie reste possible un mois avant
+# et un mois après, pour préparer/reporter des congés à cheval sur la période.
+MARGE = pd.DateOffset(months=1)
+
+
+def _bornes(params):
+    """(min, max) autorisés pour toute saisie de date de cette section."""
+    return (
+        (pd.Timestamp(params.date_debut) - MARGE).date(),
+        (pd.Timestamp(params.date_fin) + MARGE).date(),
+    )
+
 
 def section_indisponibilites(params):
     """Rend toute la section et renvoie le tableau en cours d'édition."""
@@ -27,14 +39,16 @@ def section_indisponibilites(params):
     if "indispos_version" not in st.session_state:
         st.session_state.indispos_version = 0
 
-    _importer_csv()
+    _importer_csv(params)
     _formulaire_ajout(params)
+    _alerte_hors_periode(params)
 
     st.caption(
         "Pour supprimer une ou plusieurs lignes : coche-les dans la colonne de "
         "gauche du tableau, puis appuie sur la touche « Suppr » (ou l'icône 🗑️ en "
         "haut à droite du tableau)."
     )
+    borne_min, borne_max = _bornes(params)
     tableau = st.data_editor(
         st.session_state.tableau_indispos,
         num_rows="dynamic",
@@ -44,8 +58,18 @@ def section_indisponibilites(params):
             "Infirmier·e": st.column_config.SelectboxColumn(
                 options=params.infirmiers, required=True
             ),
-            "Du": st.column_config.DateColumn(format="DD/MM/YYYY", required=True),
-            "Au": st.column_config.DateColumn(format="DD/MM/YYYY", required=True),
+            "Du": st.column_config.DateColumn(
+                format="DD/MM/YYYY",
+                required=True,
+                min_value=borne_min,
+                max_value=borne_max,
+            ),
+            "Au": st.column_config.DateColumn(
+                format="DD/MM/YYYY",
+                required=True,
+                min_value=borne_min,
+                max_value=borne_max,
+            ),
             "Type": st.column_config.SelectboxColumn(options=TYPES, required=True),
         },
         key=f"editeur_indispos_{st.session_state.indispos_version}",
@@ -72,7 +96,26 @@ def _rappel_feries(date_debut, date_fin):
         )
 
 
-def _importer_csv():
+def _alerte_hors_periode(params):
+    """La saisie est bornée à la période, mais des lignes peuvent devenir hors
+    période si la période est modifiée après coup — on prévient sans supprimer."""
+    tableau = st.session_state.tableau_indispos
+    if len(tableau) == 0:
+        return
+    borne_min, borne_max = _bornes(params)
+    dates_du = pd.to_datetime(tableau["Du"], errors="coerce").dt.date
+    dates_au = pd.to_datetime(tableau["Au"], errors="coerce").dt.date
+    hors = (dates_du < borne_min) | (dates_au > borne_max)
+    if hors.any():
+        st.warning(
+            f"{int(hors.sum())} ligne(s) sortent largement de la période "
+            f"({borne_min.strftime('%d/%m/%Y')} – "
+            f"{borne_max.strftime('%d/%m/%Y')}) : les jours hors période "
+            "seront ignorés à la génération."
+        )
+
+
+def _importer_csv(params):
     """Import d'un CSV précédemment exporté."""
     fichier_import = st.file_uploader(
         "Importer des indisponibilités (CSV exporté depuis cette app)",
@@ -99,12 +142,22 @@ def _importer_csv():
             df_imp[col] = _dates_souples(df_imp[col])
         nb_avant = len(df_imp)
         df_imp = df_imp.dropna(subset=COLONNES)
+        nb_lisibles = len(df_imp)
+        # Même règle que la saisie manuelle : période élargie de la marge.
+        borne_min, borne_max = _bornes(params)
+        df_imp = df_imp[(df_imp["Du"] >= borne_min) & (df_imp["Au"] <= borne_max)]
         st.session_state.tableau_indispos = df_imp[COLONNES].reset_index(drop=True)
         st.session_state.indispos_version += 1
         st.session_state.dernier_import = empreinte
         msg = f"{len(df_imp)} ligne(s) importée(s)."
-        if nb_avant > len(df_imp):
-            msg += f" {nb_avant - len(df_imp)} ligne(s) illisible(s) ignorée(s)."
+        if nb_avant > nb_lisibles:
+            msg += f" {nb_avant - nb_lisibles} ligne(s) illisible(s) ignorée(s)."
+        if nb_lisibles > len(df_imp):
+            msg += (
+                f" {nb_lisibles - len(df_imp)} ligne(s) hors période "
+                f"({borne_min.strftime('%d/%m/%Y')} – "
+                f"{borne_max.strftime('%d/%m/%Y')}) ignorée(s)."
+            )
         st.success(msg)
         st.rerun()
     except Exception as e:
@@ -122,6 +175,7 @@ def _dates_souples(colonne):
 def _formulaire_ajout(params):
     """Ajout rapide : un seul champ « période » (plage de dates) plutôt que deux
     champs « Du » et « Au » à renseigner séparément."""
+    borne_min, borne_max = _bornes(params)
     with st.form("ajout_indispo", clear_on_submit=True):
         col_nom, col_plage, col_type = st.columns([2, 3, 2])
         with col_nom:
@@ -132,6 +186,8 @@ def _formulaire_ajout(params):
             plage_ajout = st.date_input(
                 "Période (du – au)",
                 value=(params.date_debut, params.date_debut),
+                min_value=borne_min,
+                max_value=borne_max,
                 format="DD/MM/YYYY",
                 key="ajout_plage",
                 help="Choisis une date de début puis une date de fin. Pour un seul "
