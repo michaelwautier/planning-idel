@@ -3,6 +3,8 @@
 import pandas as pd
 import streamlit as st
 
+from ui.reinitialisation import bouton_effacer_etat
+
 ETATS = ["Inconnu", "Au travail", "En repos"]
 
 
@@ -43,6 +45,8 @@ def section_etat_precedent(params):
         },
         key=f"editeur_etat_{len(params.infirmiers)}",
     )
+
+    bouton_effacer_etat()
 
     etat_initial, erreurs_etat = _etat_initial(tableau_etat)
     if erreurs_etat:
