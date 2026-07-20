@@ -59,7 +59,8 @@ The tests cover the Streamlit-free logic: the public-holiday calendar, the CP-SA
 solver (every business rule is asserted as an invariant on a generated schedule),
 the unavailability parsing/expansion, and the summary/color helpers. The same two
 commands run on every push and pull request via GitHub Actions
-(`.github/workflows/ci.yml`), on Python 3.10 and 3.12.
+(`.github/workflows/ci.yml`), on Python 3.14 (the version Streamlit Community
+Cloud runs).
 
 ## How it works
 
