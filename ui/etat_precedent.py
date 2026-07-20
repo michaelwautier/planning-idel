@@ -26,7 +26,7 @@ def section_etat_precedent(params):
     tableau_etat = st.data_editor(
         etat_defaut,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         column_config={
             "Infirmier·e": st.column_config.TextColumn(disabled=True),
             "État": st.column_config.SelectboxColumn(options=ETATS, required=True),

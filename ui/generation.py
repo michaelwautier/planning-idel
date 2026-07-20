@@ -12,7 +12,7 @@ from solveur import generer_planning
 
 def section_generation(params, indispos, preferences, etat_initial):
     """Bouton « Générer », puis affichage du dernier résultat en session."""
-    if st.button("🚀 Générer le planning", type="primary", use_container_width=True):
+    if st.button("🚀 Générer le planning", type="primary", width="stretch"):
         st.session_state.derniere_sortie = _generer(
             params, indispos, preferences, etat_initial
         )
@@ -83,9 +83,7 @@ def _afficher_sortie(params, sortie):
     afficher_tables_planning(jours, params.infirmiers, sortie["resultat"])
 
     st.subheader("Récapitulatif")
-    st.dataframe(
-        pd.DataFrame(sortie["stats"]), use_container_width=True, hide_index=True
-    )
+    st.dataframe(pd.DataFrame(sortie["stats"]), width="stretch", hide_index=True)
     _bouton_telechargement(params, sortie)
 
 
@@ -134,5 +132,5 @@ def _bouton_telechargement(params, sortie):
         csv_buffer.getvalue().encode("utf-8-sig"),
         file_name=f"planning_{params.date_debut.isoformat()}.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )

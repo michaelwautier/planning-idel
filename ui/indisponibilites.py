@@ -37,7 +37,7 @@ def section_indisponibilites(params):
     tableau = st.data_editor(
         st.session_state.tableau_indispos,
         num_rows="dynamic",
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Infirmier·e": st.column_config.SelectboxColumn(
@@ -137,7 +137,7 @@ def _formulaire_ajout(params):
             )
         with col_type:
             type_ajout = st.selectbox("Type", options=TYPES, key="ajout_type")
-        if st.form_submit_button("➕ Ajouter", use_container_width=True):
+        if st.form_submit_button("➕ Ajouter", width="stretch"):
             # date_input renvoie (du, au) ; une sélection incomplète renvoie (du,)
             # — dans ce cas on retombe sur une période d'un seul jour.
             if isinstance(plage_ajout, (tuple, list)):
@@ -172,7 +172,7 @@ def bouton_export(tableau, date_debut):
         export_buffer.getvalue().encode("utf-8-sig"),
         file_name=f"indisponibilites_{date_debut.isoformat()}.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )
 
 
