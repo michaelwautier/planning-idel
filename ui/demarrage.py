@@ -6,6 +6,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from affichage import COULEURS_DEFAUT
 from persistance import config_navigateur
 
 
@@ -78,6 +79,12 @@ def _appliquer_config(cfg):
     st.session_state.setdefault(
         "k_vue_planning", bool(cfg.get("vue_jours_en_lignes", False))
     )
+
+    # Toutes les tournées possibles, pas seulement celles affichées : la couleur
+    # d'une tournée reste ainsi la même si on réduit puis réaugmente leur nombre.
+    couleurs = cfg.get("couleurs", {})
+    for code, defaut in COULEURS_DEFAUT.items():
+        st.session_state.setdefault(f"k_couleur_{code}", couleurs.get(code, defaut))
 
     lignes = cfg.get("indispos", [])
     if lignes and "tableau_indispos" not in st.session_state:

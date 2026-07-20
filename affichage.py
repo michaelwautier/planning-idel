@@ -1,16 +1,33 @@
 """Rendu du planning : tableaux colorés (deux vues au choix) et récapitulatif."""
 
+import re
+
 import pandas as pd
 import streamlit as st
 
 from calendrier import JOURS_FR, jours_feries
 
-COULEURS = {
+COULEURS_DEFAUT = {
     "T1": "#1f6feb",
     "T2": "#d97706",
     "T3": "#7c3aed",
     "T4": "#059669",
 }
+
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def couleur_tournee(code):
+    """Couleur choisie dans la barre latérale, sinon la couleur par défaut.
+
+    Lue en session comme `k_wide` : le visualiseur CSV affiche des plannings
+    sans passer par `Parametres`, il doit pourtant utiliser les mêmes couleurs.
+    Une valeur illisible (config corrompue) retombe sur le défaut.
+    """
+    choisie = st.session_state.get(f"k_couleur_{code}")
+    if isinstance(choisie, str) and _HEX.match(choisie):
+        return choisie
+    return COULEURS_DEFAUT.get(code)
 
 
 def afficher_planning(jours, noms, resultat, cle):
@@ -58,10 +75,23 @@ def _memoriser_vue(cle_widget):
 
 
 def _couleur(v):
-    fond = COULEURS.get(v)
-    if fond:
-        return f"background-color: {fond}; color: #ffffff; font-weight: 700"
-    return "color: #666666"
+    if v not in COULEURS_DEFAUT:
+        return "color: #666666"
+    fond = couleur_tournee(v)
+    return (
+        f"background-color: {fond}; color: {_texte_sur(fond)}; font-weight: 700"
+    )
+
+
+def _texte_sur(fond):
+    """Noir ou blanc selon la luminance du fond.
+
+    La couleur du texte doit être forcée avec le fond (le texte du thème est
+    illisible sur ces aplats) ; comme l'utilisateur peut désormais choisir un
+    fond très clair, on ne peut plus la figer à blanc.
+    """
+    r, g, b = (int(fond[i : i + 2], 16) for i in (1, 3, 5))
+    return "#000000" if (r * 299 + g * 587 + b * 114) / 1000 > 150 else "#ffffff"
 
 
 def _libelle(jour):

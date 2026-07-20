@@ -6,6 +6,8 @@ from typing import Optional
 
 import streamlit as st
 
+from affichage import COULEURS_DEFAUT
+
 
 @dataclass
 class Parametres:
@@ -27,6 +29,11 @@ class Parametres:
     binome: Optional[tuple]
     poids_binome: int
     temps_max: int
+
+
+def _reinitialiser_couleurs():
+    for code, defaut in COULEURS_DEFAUT.items():
+        st.session_state[f"k_couleur_{code}"] = defaut
 
 
 def barre_laterale():
@@ -51,6 +58,25 @@ def barre_laterale():
             "Nombre de tournées / jour", 1, 4, key="k_nb_tournees"
         )
         tournees = [f"Tournée {t + 1}" for t in range(nb_tournees)]
+
+        # Les couleurs ne transitent pas par `Parametres` : le visualiseur CSV
+        # en a besoin sans y avoir accès, il les relit en session (cf. affichage).
+        with st.expander("🎨 Couleurs des tournées"):
+            for t in range(nb_tournees):
+                code = f"T{t + 1}"
+                # Semer la clé ici et pas seulement au démarrage : si la session
+                # a été initialisée avant l'ajout de cette option, la clé manque
+                # et le color_picker démarrerait sur du noir.
+                st.session_state.setdefault(f"k_couleur_{code}", COULEURS_DEFAUT[code])
+                st.color_picker(tournees[t], key=f"k_couleur_{code}")
+            # on_click et pas `if st.button(...)` : réécrire la clé d'un widget
+            # après son rendu lève StreamlitAPIException. Le callback, lui,
+            # s'exécute avant le re-run, donc avant que les widgets existent.
+            st.button(
+                "Réinitialiser les couleurs",
+                width="stretch",
+                on_click=_reinitialiser_couleurs,
+            )
 
         periode = st.date_input(
             "Période (du – au)",
