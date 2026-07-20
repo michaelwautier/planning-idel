@@ -25,9 +25,7 @@ def section_visualiseur():
 
 
 def _afficher_csv(fichier_plan):
-    df_plan = pd.read_csv(
-        fichier_plan, sep=None, engine="python", encoding="utf-8-sig"
-    )
+    df_plan = pd.read_csv(fichier_plan, sep=None, engine="python", encoding="utf-8-sig")
     df_plan.columns = [str(c).strip() for c in df_plan.columns]
     if "Date" not in df_plan.columns:
         st.error(
@@ -62,7 +60,7 @@ def _afficher_csv(fichier_plan):
                 jours_imp, sorted(noms_imp), resultat_imp, len(cols_tournees)
             )
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 

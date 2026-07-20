@@ -27,7 +27,7 @@ def afficher_tables_planning(jours, noms, resultat):
             nom: [resultat.get((nom, j), "") or "—" for j in bloc] for nom in noms
         }
         df = pd.DataFrame(données, index=colonnes).T
-        st.dataframe(df.style.map(couleur), use_container_width=True)
+        st.dataframe(df.style.map(couleur), width="stretch")
 
 
 def stats_depuis_resultat(jours, noms, resultat, n_tour):
