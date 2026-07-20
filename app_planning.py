@@ -490,6 +490,15 @@ if "config_initialisee" not in st.session_state:
             st.session_state.tableau_indispos = _df[
                 ["Infirmier·e", "Du", "Au", "Type"]
             ].reset_index(drop=True)
+    # État de fin de période précédente : indexé par nom pour retrouver la
+    # valeur de chaque infirmier·e même si la liste change entre deux sessions.
+    _etat_lignes = _cfg.get("etat", [])
+    if _etat_lignes:
+        st.session_state.etat_sauve = {
+            str(_r["Infirmier·e"]): _r
+            for _r in _etat_lignes
+            if isinstance(_r, dict) and "Infirmier·e" in _r
+        }
     # La préférence de mise en page vient d'être chargée : si elle diffère de
     # celle qu'a utilisée set_page_config ce rendu-ci, on relance pour
     # l'appliquer tout de suite (sinon l'écran resterait en mode par défaut).
@@ -618,13 +627,34 @@ st.caption(
     "**Inconnu** = on repart de zéro (considéré comme reposé)."
 )
 
+# Valeurs par défaut reconstituées depuis la config persistée (localStorage),
+# pour ne pas repartir de « Inconnu » après un rechargement de page.
+_etat_sauve = st.session_state.get("etat_sauve", {})
+_options_tournee = ["—"] + [f"T{t + 1}" for t in range(nb_tournees)]
+_lignes_etat_defaut = []
+for _nom in infirmiers:
+    _r = _etat_sauve.get(_nom, {})
+    _etat_txt = str(_r.get("État", "Inconnu"))
+    if _etat_txt not in ("Inconnu", "Au travail", "En repos"):
+        _etat_txt = "Inconnu"
+    try:
+        _depuis = min(10, max(1, int(_r.get("Depuis (jours)", 1))))
+    except (TypeError, ValueError):
+        _depuis = 1
+    _tournee = str(_r.get("Tournée", "—"))
+    if _tournee not in _options_tournee:  # ex. T3 devenu invalide (moins de tournées)
+        _tournee = "—"
+    _lignes_etat_defaut.append(
+        {
+            "Infirmier·e": _nom,
+            "État": _etat_txt,
+            "Depuis (jours)": _depuis,
+            "Tournée": _tournee,
+        }
+    )
 etat_defaut = pd.DataFrame(
-    {
-        "Infirmier·e": infirmiers,
-        "État": ["Inconnu"] * len(infirmiers),
-        "Depuis (jours)": [1] * len(infirmiers),
-        "Tournée": ["—"] * len(infirmiers),
-    }
+    _lignes_etat_defaut,
+    columns=["Infirmier·e", "État", "Depuis (jours)", "Tournée"],
 )
 tableau_etat = st.data_editor(
     etat_defaut,
@@ -642,7 +672,7 @@ tableau_etat = st.data_editor(
             help="Depuis combien de jours consécutifs (travail ou repos).",
         ),
         "Tournée": st.column_config.SelectboxColumn(
-            options=["—"] + [f"T{t + 1}" for t in range(nb_tournees)],
+            options=_options_tournee,
             help="Tournée en cours si « Au travail » (pour la continuité).",
         ),
     },
@@ -828,6 +858,19 @@ for _, _l in tableau.iterrows():
             "Type": str(_l["Type"]),
         }
     )
+# Sérialisation de l'état de fin de période précédente (persisté comme le reste
+# pour survivre à un rechargement accidentel de la page).
+_etat_serialise = []
+for _, _l in tableau_etat.iterrows():
+    _depuis_val = _l["Depuis (jours)"]
+    _etat_serialise.append(
+        {
+            "Infirmier·e": str(_l["Infirmier·e"]),
+            "État": str(_l["État"]),
+            "Depuis (jours)": 1 if pd.isna(_depuis_val) else int(_depuis_val),
+            "Tournée": str(_l["Tournée"]),
+        }
+    )
 cfg_actuelle = {
     "noms": noms_texte,
     "nb_tournees": int(nb_tournees),
@@ -842,6 +885,7 @@ cfg_actuelle = {
     "poids_binome": int(poids_binome),
     "temps_max": int(temps_max),
     "indispos": _indispos_serialisees,
+    "etat": _etat_serialise,
 }
 if st.session_state.get("cfg_sauvee") != cfg_actuelle:
     if sauver_config(cfg_actuelle):
