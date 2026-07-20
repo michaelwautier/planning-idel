@@ -433,7 +433,14 @@ def generer_planning(
 # Interface
 # ============================================================
 
-st.set_page_config(page_title="Planning cabinet IDEL", page_icon="🗓️", layout="wide")
+# Le mode large (pleine largeur) est réglable depuis l'interface : Streamlit
+# masque ce réglage dans son menu natif sur les apps déployées. On lit la
+# préférence dans session_state (persistée via la config navigateur) avant tout
+# autre appel Streamlit, car set_page_config doit rester la première commande.
+_layout = "wide" if st.session_state.get("k_wide", True) else "centered"
+st.set_page_config(
+    page_title="Planning cabinet IDEL", page_icon="🗓️", layout=_layout
+)
 st.title("🗓️ Planning cabinet infirmier")
 
 # Chargement de la configuration persistée (une seule fois par session).
@@ -456,12 +463,13 @@ if "config_initialisee" not in st.session_state:
         "k_noms", _cfg.get("noms", "Alice\nBruno\nChloé\nDavid\nEmma")
     )
     st.session_state.setdefault("k_nb_tournees", int(_cfg.get("nb_tournees", 2)))
+    st.session_state.setdefault("k_wide", bool(_cfg.get("wide", True)))
     try:
-        st.session_state.setdefault("k_debut", date.fromisoformat(_cfg["date_debut"]))
-        st.session_state.setdefault("k_fin", date.fromisoformat(_cfg["date_fin"]))
+        _debut = date.fromisoformat(_cfg["date_debut"])
+        _fin = date.fromisoformat(_cfg["date_fin"])
     except (KeyError, ValueError):
-        st.session_state.setdefault("k_debut", date(2026, 8, 3))
-        st.session_state.setdefault("k_fin", date(2026, 8, 30))
+        _debut, _fin = date(2026, 8, 3), date(2026, 8, 30)
+    st.session_state.setdefault("k_periode", (_debut, _fin))
     _mm = _cfg.get("min_max", [2, 4])
     st.session_state.setdefault("k_minmax", (int(_mm[0]), int(_mm[1])))
     st.session_state.setdefault("k_min_repos", int(_cfg.get("min_repos", 2)))
@@ -482,10 +490,22 @@ if "config_initialisee" not in st.session_state:
             st.session_state.tableau_indispos = _df[
                 ["Infirmier·e", "Du", "Au", "Type"]
             ].reset_index(drop=True)
+    # La préférence de mise en page vient d'être chargée : si elle diffère de
+    # celle qu'a utilisée set_page_config ce rendu-ci, on relance pour
+    # l'appliquer tout de suite (sinon l'écran resterait en mode par défaut).
+    if ("wide" if st.session_state.k_wide else "centered") != _layout:
+        st.rerun()
 
 with st.sidebar:
     st.header("Paramètres")
     st.caption("💾 Configuration sauvegardée automatiquement dans ce navigateur")
+
+    st.toggle(
+        "Mode large (pleine largeur)",
+        key="k_wide",
+        help="Élargit le contenu sur toute la largeur de l'écran. Décoche pour "
+        "un affichage centré, plus étroit sur les grands écrans.",
+    )
 
     noms_texte = st.text_area(
         "Infirmier·e·s (un nom par ligne)", height=120, key="k_noms"
@@ -497,11 +517,20 @@ with st.sidebar:
     )
     tournees = [f"Tournée {t + 1}" for t in range(nb_tournees)]
 
-    col1, col2 = st.columns(2)
-    with col1:
-        date_debut = st.date_input("Début", format="DD/MM/YYYY", key="k_debut")
-    with col2:
-        date_fin = st.date_input("Fin", format="DD/MM/YYYY", key="k_fin")
+    periode = st.date_input(
+        "Période (du – au)",
+        format="DD/MM/YYYY",
+        key="k_periode",
+        help="Sélectionne la date de début puis la date de fin du planning.",
+    )
+    # En mode plage, date_input renvoie (debut, fin) ; pendant la sélection il
+    # peut renvoyer (debut,) — on retombe alors sur un planning d'un seul jour
+    # le temps que la date de fin soit choisie.
+    if isinstance(periode, (tuple, list)):
+        date_debut = periode[0]
+        date_fin = periode[-1]
+    else:
+        date_debut = date_fin = periode
     nb_jours = (date_fin - date_debut).days + 1
 
     st.subheader("Contraintes")
@@ -716,22 +745,59 @@ if fichier_import is not None:
         except Exception as e:
             st.error(f"Impossible de lire ce CSV : {e}")
 
-tableau_avec_sel = st.session_state.tableau_indispos.copy()
-if "🗑️" not in tableau_avec_sel.columns:
-    tableau_avec_sel.insert(0, "🗑️", False)
+# Ajout rapide : un seul champ « période » (plage de dates) plutôt que deux
+# champs « Du » et « Au » à renseigner séparément.
+with st.form("ajout_indispo", clear_on_submit=True):
+    col_nom, col_plage, col_type = st.columns([2, 3, 2])
+    with col_nom:
+        nom_ajout = st.selectbox("Infirmier·e", options=infirmiers, key="ajout_nom")
+    with col_plage:
+        plage_ajout = st.date_input(
+            "Période (du – au)",
+            value=(date_debut, date_debut),
+            format="DD/MM/YYYY",
+            key="ajout_plage",
+            help="Choisis une date de début puis une date de fin. Pour un seul "
+            "jour, clique deux fois sur la même date.",
+        )
+    with col_type:
+        type_ajout = st.selectbox(
+            "Type", options=["Indisponible", "Souhait de repos"], key="ajout_type"
+        )
+    if st.form_submit_button("➕ Ajouter", use_container_width=True):
+        # date_input renvoie (du, au) ; une sélection incomplète renvoie (du,)
+        # — dans ce cas on retombe sur une période d'un seul jour.
+        if isinstance(plage_ajout, (tuple, list)):
+            du_ajout, au_ajout = plage_ajout[0], plage_ajout[-1]
+        else:
+            du_ajout = au_ajout = plage_ajout
+        nouvelle_ligne = pd.DataFrame(
+            [
+                {
+                    "Infirmier·e": nom_ajout,
+                    "Du": du_ajout,
+                    "Au": au_ajout,
+                    "Type": type_ajout,
+                }
+            ]
+        )
+        st.session_state.tableau_indispos = pd.concat(
+            [st.session_state.tableau_indispos, nouvelle_ligne], ignore_index=True
+        )
+        st.session_state.indispos_version += 1
+        st.rerun()
 
+st.caption(
+    "Pour supprimer une ou plusieurs lignes : coche-les dans la colonne de "
+    "gauche du tableau, puis appuie sur la touche « Suppr » (ou l'icône 🗑️ en "
+    "haut à droite du tableau)."
+)
 tableau_edit = st.data_editor(
-    tableau_avec_sel,
+    st.session_state.tableau_indispos,
     num_rows="dynamic",
     use_container_width=True,
     hide_index=True,
     column_config={
-        "🗑️": st.column_config.CheckboxColumn(
-            "🗑️",
-            help="Coche puis clique « Supprimer les lignes cochées »",
-            default=False,
-            width="small",
-        ),
         "Infirmier·e": st.column_config.SelectboxColumn(
             options=infirmiers, required=True
         ),
@@ -744,18 +810,8 @@ tableau_edit = st.data_editor(
     key=f"editeur_indispos_{st.session_state.indispos_version}",
 )
 
-col_suppr, col_export = st.columns(2)
-with col_suppr:
-    if st.button("🗑️ Supprimer les lignes cochées", use_container_width=True):
-        restantes = tableau_edit[tableau_edit["🗑️"] != True]  # noqa: E712
-        st.session_state.tableau_indispos = restantes.drop(columns=["🗑️"]).reset_index(
-            drop=True
-        )
-        st.session_state.indispos_version += 1
-        st.rerun()
-
-# Le tableau de travail, sans la colonne de sélection
-tableau = tableau_edit.drop(columns=["🗑️"])
+# Le tableau de travail reflète les éditions (et suppressions natives) en cours.
+tableau = tableau_edit
 # Mémoriser les modifications en cours pour ne pas les perdre au prochain rerun
 st.session_state.tableau_indispos = tableau.reset_index(drop=True)
 
@@ -775,6 +831,7 @@ for _, _l in tableau.iterrows():
 cfg_actuelle = {
     "noms": noms_texte,
     "nb_tournees": int(nb_tournees),
+    "wide": bool(st.session_state.get("k_wide", True)),
     "date_debut": date_debut.isoformat(),
     "date_fin": date_fin.isoformat(),
     "min_max": [int(min_consec), int(max_consec)],
@@ -797,17 +854,16 @@ if st.session_state.get("cfg_sauvee") != cfg_actuelle:
         )
 
 # Export du tableau courant (avec les modifications en cours)
-with col_export:
-    if len(tableau) > 0:
-        export_buffer = io.StringIO()
-        tableau.to_csv(export_buffer, sep=";", index=False)
-        st.download_button(
-            "💾 Exporter ces indisponibilités (CSV)",
-            export_buffer.getvalue().encode("utf-8-sig"),
-            file_name=f"indisponibilites_{date_debut.isoformat()}.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+if len(tableau) > 0:
+    export_buffer = io.StringIO()
+    tableau.to_csv(export_buffer, sep=";", index=False)
+    st.download_button(
+        "💾 Exporter ces indisponibilités (CSV)",
+        export_buffer.getvalue().encode("utf-8-sig"),
+        file_name=f"indisponibilites_{date_debut.isoformat()}.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
 
 indispos, preferences = {}, {}
 lignes_invalides = []
