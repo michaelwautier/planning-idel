@@ -54,83 +54,45 @@ def init_page():
         st.rerun()
 
 
-# ---------------------------------------------------------------------------
-# TRANSITIONAL — remove in a follow-up PR.
-#
-# Configs saved before the codebase was translated use French key names. We now
-# write English ones (see `ui.autosave`) and read both, so an existing config
-# survives the update: it is read once through the fallback, then rewritten with
-# English keys by the first autosave of the session.
-#
-# To finish the migration, delete `_LEGACY_KEYS` and `_get`, and replace the
-# `_get(cfg, "x", default)` calls below with plain `cfg.get("x", default)`.
-# Anyone who hasn't opened the app between the two releases falls back to the
-# defaults — losing their saved config, so leave a comfortable gap.
-# ---------------------------------------------------------------------------
-_LEGACY_KEYS = {
-    "names": "noms",
-    "n_rounds": "nb_tournees",
-    "start_date": "date_debut",
-    "end_date": "date_fin",
-    "min_rest": "min_repos",
-    "truncated_blocks": "blocs_tronques",
-    "owners": "titulaires",
-    "pair": "binome",
-    "pair_weight": "poids_binome",
-    "max_time": "temps_max",
-    "days_as_rows_view": "vue_jours_en_lignes",
-    "colors": "couleurs",
-    "unavailability": "indispos",
-    "state": "etat",
-}
-
-
-def _get(cfg, key, default):
-    """Read a config key, falling back to its pre-translation French name.
-
-    `wide` and `min_max` were already English and have no legacy alias. The row
-    dicts stored under `unavailability`/`state` keep their French inner keys —
-    those are DataFrame column names, displayed as-is and written to CSV.
-    """
-    if key in cfg:
-        return cfg[key]
-    return cfg.get(_LEGACY_KEYS.get(key, key), default)
-
-
 def _apply_config(cfg):
-    """Pre-fill session_state with the persisted values (or the defaults)."""
+    """Pre-fill session_state with the persisted values (or the defaults).
+
+    The keys are the localStorage schema, written by `ui.autosave.payload`.
+    The row dicts under `unavailability`/`state` keep French inner keys — those
+    are DataFrame column names, displayed as-is and written to CSV.
+    """
     st.session_state.setdefault(
-        "k_names", _get(cfg, "names", "Alice\nBruno\nChloé\nDavid\nEmma")
+        "k_names", cfg.get("names", "Alice\nBruno\nChloé\nDavid\nEmma")
     )
-    st.session_state.setdefault("k_n_rounds", int(_get(cfg, "n_rounds", 2)))
-    st.session_state.setdefault("k_wide", bool(_get(cfg, "wide", True)))
+    st.session_state.setdefault("k_n_rounds", int(cfg.get("n_rounds", 2)))
+    st.session_state.setdefault("k_wide", bool(cfg.get("wide", True)))
     try:
-        start = date.fromisoformat(_get(cfg, "start_date", None))
-        end = date.fromisoformat(_get(cfg, "end_date", None))
+        start = date.fromisoformat(cfg.get("start_date"))
+        end = date.fromisoformat(cfg.get("end_date"))
     except (TypeError, ValueError):
         start, end = date(2026, 8, 3), date(2026, 8, 30)
     st.session_state.setdefault("k_period", (start, end))
-    mm = _get(cfg, "min_max", [2, 4])
+    mm = cfg.get("min_max", [2, 4])
     st.session_state.setdefault("k_minmax", (int(mm[0]), int(mm[1])))
-    st.session_state.setdefault("k_min_rest", int(_get(cfg, "min_rest", 2)))
+    st.session_state.setdefault("k_min_rest", int(cfg.get("min_rest", 2)))
     st.session_state.setdefault(
-        "k_truncated", bool(_get(cfg, "truncated_blocks", False))
+        "k_truncated", bool(cfg.get("truncated_blocks", False))
     )
-    st.session_state.setdefault("k_owners", list(_get(cfg, "owners", [])))
-    st.session_state.setdefault("k_pair", list(_get(cfg, "pair", [])))
-    st.session_state.setdefault("k_pair_weight", int(_get(cfg, "pair_weight", 6)))
-    st.session_state.setdefault("k_max_time", int(_get(cfg, "max_time", 20)))
+    st.session_state.setdefault("k_owners", list(cfg.get("owners", [])))
+    st.session_state.setdefault("k_pair", list(cfg.get("pair", [])))
+    st.session_state.setdefault("k_pair_weight", int(cfg.get("pair_weight", 6)))
+    st.session_state.setdefault("k_max_time", int(cfg.get("max_time", 20)))
     st.session_state.setdefault(
-        "k_schedule_view", bool(_get(cfg, "days_as_rows_view", False))
+        "k_schedule_view", bool(cfg.get("days_as_rows_view", False))
     )
 
     # Every possible round, not only the displayed ones: a round keeps its color
     # if their number is lowered and raised again.
-    colors = _get(cfg, "colors", {})
+    colors = cfg.get("colors", {})
     for code, default in DEFAULT_COLORS.items():
         st.session_state.setdefault(f"k_color_{code}", colors.get(code, default))
 
-    rows = _get(cfg, "unavailability", [])
+    rows = cfg.get("unavailability", [])
     if rows and "unavailability_table" not in st.session_state:
         df = pd.DataFrame(rows)
         if {"Infirmier·e", "Du", "Au", "Type"}.issubset(df.columns):
@@ -143,7 +105,7 @@ def _apply_config(cfg):
 
     # End-of-previous-period state: indexed by name so each nurse's value is
     # found again even if the list changes between two sessions.
-    state_rows = _get(cfg, "state", [])
+    state_rows = cfg.get("state", [])
     if state_rows:
         st.session_state.saved_state = {
             str(r["Infirmier·e"]): r
