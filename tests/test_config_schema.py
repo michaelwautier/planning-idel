@@ -2,45 +2,23 @@
 
 These two modules sit at opposite ends of the config round-trip and nothing but
 matching string literals ties them together, so a rename on one side would
-silently reset everyone's config. Covers the French → English transition too:
-until `_LEGACY_KEYS` is removed, a config saved by the pre-translation version
-must still load.
+silently reset everyone's config.
+
+`_apply_config` can't simply be called here: it writes to `st.session_state`,
+which doesn't work outside `streamlit run`. We read the keys it looks up
+straight from its source instead.
 """
 
+import ast
+import inspect
 from datetime import date
 
 import pandas as pd
 import pytest
 
+import ui.startup
 from ui.autosave import payload
-from ui.startup import _LEGACY_KEYS, _get
 from ui.unavailability import COLUMNS
-
-# `wide` and `min_max` were already English, so they never needed an alias.
-NEVER_RENAMED = {"wide", "min_max"}
-
-# The exact keys the pre-translation version wrote to localStorage, transcribed
-# from `ui/sauvegarde.py` before the rename (git show 2dcc4ce:ui/sauvegarde.py).
-# Hardcoded on purpose: deriving them from `_LEGACY_KEYS` would make the
-# fallback test self-consistent and blind to a typo in an alias.
-LEGACY_SCHEMA = {
-    "noms",
-    "nb_tournees",
-    "wide",
-    "date_debut",
-    "date_fin",
-    "min_max",
-    "min_repos",
-    "blocs_tronques",
-    "titulaires",
-    "binome",
-    "poids_binome",
-    "temps_max",
-    "vue_jours_en_lignes",
-    "couleurs",
-    "indispos",
-    "etat",
-}
 
 
 class FakeSettings:
@@ -59,7 +37,8 @@ class FakeSettings:
 
 
 @pytest.fixture
-def cfg():
+def written_keys():
+    """The keys `ui.autosave` persists, from a real payload."""
     table = pd.DataFrame(
         [["Alice", date(2026, 9, 2), date(2026, 9, 4), "Indisponible"]],
         columns=COLUMNS,
@@ -68,43 +47,57 @@ def cfg():
         [["Alice", "Au travail", 2, "T1"]],
         columns=["Infirmier·e", "État", "Depuis (jours)", "Tournée"],
     )
-    return payload(FakeSettings(), table, state_table)
+    return set(payload(FakeSettings(), table, state_table))
 
 
-def test_every_written_key_is_read_back(cfg):
-    """`_get` must find each key autosave writes, without hitting the default."""
-    sentinel = object()
-    for key in cfg:
-        assert _get(cfg, key, sentinel) is not sentinel, f"{key} is written, never read"
+@pytest.fixture
+def read_keys():
+    """The keys `ui.startup._apply_config` looks up, parsed from its source."""
+    tree = ast.parse(inspect.getsource(ui.startup._apply_config))
+    return {
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "get"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "cfg"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+    }
 
 
-def test_legacy_map_covers_every_renamed_key(cfg):
-    """A key that changed name needs an alias, or old configs lose it."""
-    assert set(cfg) - NEVER_RENAMED == set(_LEGACY_KEYS)
+def test_every_written_key_is_read_back(written_keys, read_keys):
+    assert written_keys <= read_keys, "written by autosave, never read by startup"
 
 
-def test_legacy_map_has_no_stale_entries(cfg):
-    assert set(_LEGACY_KEYS) <= set(cfg)
+def test_every_read_key_is_written(written_keys, read_keys):
+    assert read_keys <= written_keys, "read by startup, never written by autosave"
 
 
-def test_aliases_are_the_real_historical_names():
-    """Guards against a typo in an alias, which `_get` could never resolve."""
-    assert set(_LEGACY_KEYS.values()) | NEVER_RENAMED == LEGACY_SCHEMA
+def test_schema_is_not_empty(written_keys):
+    """Guards the two set comparisons above against a vacuous pass."""
+    assert len(written_keys) == 16
 
 
-def test_french_config_still_loads(cfg):
-    """A pre-translation config: every value must survive the rename."""
-    french = {_LEGACY_KEYS.get(k, k): v for k, v in cfg.items()}
-    assert set(french) == LEGACY_SCHEMA  # really is the old on-disk shape
-    for key, expected in cfg.items():
-        assert _get(french, key, None) == expected
-
-
-def test_english_key_wins_over_the_french_one():
-    """Once migrated, a stale French key must never shadow the English one."""
-    mixed = {"names": "new", "noms": "old"}
-    assert _get(mixed, "names", None) == "new"
-
-
-def test_missing_key_falls_back_to_the_default():
-    assert _get({}, "names", "default") == "default"
+def test_no_leftover_french_keys(written_keys):
+    """The pre-translation names are gone; the fallback that read them is too."""
+    legacy = {
+        "noms",
+        "nb_tournees",
+        "date_debut",
+        "date_fin",
+        "min_repos",
+        "blocs_tronques",
+        "titulaires",
+        "binome",
+        "poids_binome",
+        "temps_max",
+        "vue_jours_en_lignes",
+        "couleurs",
+        "indispos",
+        "etat",
+    }
+    assert not (written_keys & legacy)
+    assert not hasattr(ui.startup, "_LEGACY_KEYS")
+    assert not hasattr(ui.startup, "_get")
