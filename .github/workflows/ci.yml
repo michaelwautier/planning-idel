@@ -18,12 +18,12 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          # Version de Streamlit Community Cloud : on teste ce qui tourne en prod.
+          # Streamlit Community Cloud's version: we test what runs in production.
           python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
@@ -32,8 +32,8 @@ jobs:
       - name: Tests (pytest)
         run: pytest -q
 
-      - name: L'application démarre
+      - name: The app starts
         run: python -c "import app_planning"
         env:
-          # Streamlit n'a pas de navigateur ni de terminal interactif en CI.
+          # Streamlit has neither a browser nor an interactive terminal in CI.
           STREAMLIT_SERVER_HEADLESS: "true"

@@ -1,6 +1,6 @@
-"""Sections de l'interface Streamlit, dans l'ordre où elles s'affichent.
+"""Streamlit UI sections, in the order they are displayed.
 
-Chaque module rend une section de la page et renvoie ce dont les sections
-suivantes ont besoin. L'ordre des appels dans `app_planning.py` EST la mise en
-page : ne pas réordonner sans vérifier le rendu.
+Each module renders one section of the page and returns what the following
+sections need. The call order in `app_planning.py` IS the page layout: don't
+reorder without checking the rendering.
 """
