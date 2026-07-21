@@ -59,8 +59,13 @@ The tests cover the Streamlit-free logic: the public-holiday calendar, the CP-SA
 solver (every business rule is asserted as an invariant on a generated schedule),
 the unavailability parsing/expansion, and the summary/color helpers. The same two
 commands run on every push and pull request via GitHub Actions
-(`.github/workflows/ci.yml`), on Python 3.14 (the version Streamlit Community
-Cloud runs).
+(`.github/workflows/ci.yml`), on the Python version Streamlit Community Cloud
+runs.
+
+> **On macOS (Apple Silicon), run the tests and the app with
+> `PLANNING_NB_WORKERS=1`.** With the Homebrew Python builds, CP-SAT hangs
+> forever as soon as it uses more than one worker. Linux is unaffected, so this
+> is a local-development workaround only - see `AGENTS.md`.
 
 ## How it works
 
