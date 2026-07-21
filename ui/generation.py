@@ -1,109 +1,109 @@
-"""Bouton de génération (avec paliers d'assouplissement) et rendu du résultat."""
+"""Generate button (with relaxation tiers) and rendering of the result."""
 
 import io
 
 import pandas as pd
 import streamlit as st
 
-from affichage import afficher_planning
-from calendrier import JOURS_FR
-from solveur import generer_planning
+from display import show_schedule
+from french_calendar import DAY_NAMES_FR
+from solver import generate_schedule
 
 
-def section_generation(params, indispos, preferences, etat_initial):
-    """Bouton « Générer », puis affichage du dernier résultat en session."""
+def generation_section(settings, unavailable, preferences, initial_state):
+    """« Générer » button, then display of the last result held in session."""
     if st.button("🚀 Générer le planning", type="primary", width="stretch"):
-        st.session_state.derniere_sortie = _generer(
-            params, indispos, preferences, etat_initial
+        st.session_state.last_output = _generate(
+            settings, unavailable, preferences, initial_state
         )
 
-    sortie = st.session_state.get("derniere_sortie")
-    if sortie is None and "derniere_sortie" in st.session_state:
-        _message_echec(params.titulaires)
-    elif sortie:
-        _afficher_sortie(params, sortie)
+    output = st.session_state.get("last_output")
+    if output is None and "last_output" in st.session_state:
+        _failure_message(settings.owners)
+    elif output:
+        _show_output(settings, output)
 
 
-def _generer(params, indispos, preferences, etat_initial):
-    """Essai normal, puis paliers d'assouplissement si des titulaires existent."""
-    args_communs = dict(
-        infirmiers=params.infirmiers,
-        tournees=params.tournees,
-        date_debut=params.date_debut,
-        nb_jours=params.nb_jours,
-        min_consecutifs=params.min_consec,
-        max_consecutifs=params.max_consec,
-        min_repos=params.min_repos,
-        blocs_tronques_fin=params.blocs_tronques,
-        indispos=indispos,
+def _generate(settings, unavailable, preferences, initial_state):
+    """Normal attempt, then relaxation tiers if owners have been designated."""
+    common_args = dict(
+        nurses=settings.nurses,
+        rounds=settings.rounds,
+        start_date=settings.start_date,
+        n_days=settings.n_days,
+        min_consecutive=settings.min_consecutive,
+        max_consecutive=settings.max_consecutive,
+        min_rest=settings.min_rest,
+        truncated_end_blocks=settings.truncated_blocks,
+        unavailable=unavailable,
         preferences=preferences,
-        temps_max=params.temps_max,
-        binome=params.binome,
-        poids_binome=params.poids_binome,
-        etat_initial=etat_initial,
-        titulaires=params.titulaires,
+        max_time=settings.max_time,
+        pair=settings.pair,
+        pair_weight=settings.pair_weight,
+        initial_state=initial_state,
+        owners=settings.owners,
     )
-    with st.spinner(f"Calcul en cours (max {params.temps_max} s)…"):
-        sortie = generer_planning(**args_communs, niveau_relax=0)
-    if sortie is None and params.titulaires:
-        for niveau in (1, 2):
+    with st.spinner(f"Calcul en cours (max {settings.max_time} s)…"):
+        output = generate_schedule(**common_args, relax_level=0)
+    if output is None and settings.owners:
+        for level in (1, 2):
             with st.spinner(
                 f"Planning infaisable — nouvel essai en assouplissant les "
-                f"règles des titulaires (palier {niveau}/2)…"
+                f"règles des titulaires (palier {level}/2)…"
             ):
-                sortie = generer_planning(**args_communs, niveau_relax=niveau)
-            if sortie:
+                output = generate_schedule(**common_args, relax_level=level)
+            if output:
                 break
-    return sortie
+    return output
 
 
-def _message_echec(titulaires):
+def _failure_message(owners):
     msg = (
         "Aucun planning possible avec ces contraintes"
-        + (", même en assouplissant les règles des titulaires" if titulaires else "")
+        + (", même en assouplissant les règles des titulaires" if owners else "")
         + ". Pistes : élargir la plage min–max de jours consécutifs, réduire le "
         "repos minimum, vérifier les indisponibilités, ou revoir l'état de la "
         "période précédente (un état incohérent peut bloquer les premiers jours)."
     )
-    if not titulaires:
+    if not owners:
         msg += " Tu peux aussi désigner des titulaires dans la barre latérale."
     st.error(msg)
 
 
-def _afficher_sortie(params, sortie):
-    qualite = (
+def _show_output(settings, output):
+    quality = (
         "optimal"
-        if sortie["optimal"]
+        if output["optimal"]
         else "faisable (non prouvé optimal — augmente le temps de calcul pour affiner)"
     )
-    st.success(f"Planning {qualite}, calculé en {sortie['duree']:.1f} s")
-    _avertir_relax(params, sortie)
+    st.success(f"Planning {quality}, calculé en {output['duration']:.1f} s")
+    _warn_relaxed(settings, output)
 
-    afficher_planning(
-        sortie["jours"], params.infirmiers, sortie["resultat"], cle="genere"
-    )
+    show_schedule(output["days"], settings.nurses, output["result"], key="generated")
 
     st.subheader("Récapitulatif")
-    st.dataframe(pd.DataFrame(sortie["stats"]), width="stretch", hide_index=True)
-    _bouton_telechargement(params, sortie)
+    st.dataframe(pd.DataFrame(output["stats"]), width="stretch", hide_index=True)
+    _download_button(settings, output)
 
 
-def _avertir_relax(params, sortie):
-    """Prévient si le planning n'a été trouvé qu'en assouplissant les règles."""
-    niveau = sortie.get("niveau_relax", 0)
-    noms = ", ".join(sorted(params.titulaires))
-    if niveau == 1:
+def _warn_relaxed(settings, output):
+    """Warn if the schedule was only found by relaxing the rules."""
+    level = output.get("relax_level", 0)
+    names = ", ".join(sorted(settings.owners))
+    if level == 1:
         st.warning(
             "⚠️ Aucun planning ne respectait toutes les règles. Les règles des "
-            "titulaires (" + noms + ") ont été "
-            "assouplies : jusqu'à " + str(params.max_consec + 1) + " jours consécutifs "
+            "titulaires (" + names + ") ont été "
+            "assouplies : jusqu'à "
+            + str(settings.max_consecutive + 1)
+            + " jours consécutifs "
             "possibles, et la règle « 3 jours de repos après un bloc de 4 » "
             "est levée pour eux. Vérifie leurs lignes dans le planning."
         )
-    elif niveau >= 2:
+    elif level >= 2:
         st.warning(
             "⚠️ Planning très contraint. Les règles des titulaires ("
-            + noms
+            + names
             + ") ont été fortement assouplies : "
             "plus de limite de jours consécutifs, jours de travail isolés "
             "autorisés, et repos minimum réduit à 1 jour. Vérifie bien leurs "
@@ -111,27 +111,27 @@ def _avertir_relax(params, sortie):
         )
 
 
-def _bouton_telechargement(params, sortie):
-    """Une ligne par jour, une colonne par tournée (format lisible par Excel)."""
-    lignes = []
-    for j in sortie["jours"]:
-        ligne = {"Date": j.isoformat(), "Jour": JOURS_FR[j.weekday()]}
-        for t_idx, t_nom in enumerate(params.tournees):
-            ligne[t_nom] = next(
+def _download_button(settings, output):
+    """One row per day, one column per round (Excel-readable format)."""
+    rows = []
+    for day in output["days"]:
+        row = {"Date": day.isoformat(), "Jour": DAY_NAMES_FR[day.weekday()]}
+        for t_idx, round_name in enumerate(settings.rounds):
+            row[round_name] = next(
                 (
-                    nom
-                    for nom in params.infirmiers
-                    if sortie["resultat"][(nom, j)] == f"T{t_idx + 1}"
+                    name
+                    for name in settings.nurses
+                    if output["result"][(name, day)] == f"T{t_idx + 1}"
                 ),
                 "",
             )
-        lignes.append(ligne)
+        rows.append(row)
     csv_buffer = io.StringIO()
-    pd.DataFrame(lignes).to_csv(csv_buffer, sep=";", index=False)
+    pd.DataFrame(rows).to_csv(csv_buffer, sep=";", index=False)
     st.download_button(
         "⬇️ Télécharger le CSV (Excel)",
         csv_buffer.getvalue().encode("utf-8-sig"),
-        file_name=f"planning_{params.date_debut.isoformat()}.csv",
+        file_name=f"planning_{settings.start_date.isoformat()}.csv",
         mime="text/csv",
         width="stretch",
     )

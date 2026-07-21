@@ -1,33 +1,32 @@
 #!/usr/bin/env python3
+"""Visual interface of the IDEL schedule generator.
+
+Dependencies: pip install ortools streamlit pandas
+Run with    : streamlit run app_planning.py
+(opens automatically in the browser at http://localhost:8501)
+
+This file is only a conductor: each page section lives in `ui/`. The call order
+below IS the page layout (Streamlit renders the page top to bottom on every
+interaction) — don't reorder lightly.
 """
-Interface visuelle du générateur de planning IDEL.
 
-Dépendances : pip install ortools streamlit pandas
-Lancement   : streamlit run app_planning.py
-(s'ouvre automatiquement dans le navigateur sur http://localhost:8501)
+from ui import autosave, settings, unavailability
+from ui.generation import generation_section
+from ui.previous_state import previous_state_section
+from ui.startup import init_page
+from ui.viewer import viewer_section
 
-Ce fichier n'est qu'un chef d'orchestre : chaque section de la page vit dans
-`ui/`. L'ordre des appels ci-dessous EST la mise en page (Streamlit rend la
-page de haut en bas à chaque interaction) — ne pas réordonner à la légère.
-"""
+init_page()
 
-from ui import indisponibilites, parametres, sauvegarde
-from ui.demarrage import initialiser_page
-from ui.etat_precedent import section_etat_precedent
-from ui.generation import section_generation
-from ui.visualiseur import section_visualiseur
+params = settings.sidebar()
+settings.validate(params)  # may halt rendering
 
-initialiser_page()
+state_table, initial_state = previous_state_section(params)
+table = unavailability.unavailability_section(params)
 
-params = parametres.barre_laterale()
-parametres.valider(params)  # peut interrompre le rendu
+autosave.autosave(params, table, state_table)
+unavailability.export_button(table, params.start_date)
+unavailable, preferences = unavailability.expand(table)
 
-tableau_etat, etat_initial = section_etat_precedent(params)
-tableau = indisponibilites.section_indisponibilites(params)
-
-sauvegarde.sauvegarder(params, tableau, tableau_etat)
-indisponibilites.bouton_export(tableau, params.date_debut)
-indispos, preferences = indisponibilites.extraire(tableau)
-
-section_generation(params, indispos, preferences, etat_initial)
-section_visualiseur()
+generation_section(params, unavailable, preferences, initial_state)
+viewer_section()

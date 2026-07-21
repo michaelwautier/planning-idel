@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Les modules du projet sont à la racine (pas de package installable) :
-# on ajoute la racine au sys.path pour que `import solveur` fonctionne.
+# The project modules live at the root (no installable package): we add the
+# root to sys.path so that `import solver` works.
 pythonpath = ["."]
 
 [tool.ruff]
@@ -9,6 +9,6 @@ target-version = "py310"
 exclude = ["venv", "planning_idel.py"]
 
 [tool.ruff.lint]
-# E741 : `l` est la notation d'origine de l'algorithme de Butcher (calendrier.py)
-# et un raccourci pour « ligne » dans sauvegarde.py — pas une ambiguïté ici.
+# E741: `l` is the original notation of Butcher's algorithm
+# (french_calendar.py) — not an ambiguity here.
 ignore = ["E741"]
